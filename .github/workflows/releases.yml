@@ -1,0 +1,57 @@
+name: Create Version Releases
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  create-releases:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create Releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for dir in */; do
+            VERSION="${dir%/}"
+
+            # Match semantic version folders like 1.0.0
+            if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+
+              EXE_PATH="$VERSION/Lotus.Installer.exe"
+
+              if [ ! -f "$EXE_PATH" ]; then
+                echo "Skipping $VERSION - Lotus.Installer.exe not found"
+                continue
+              fi
+
+              echo "Processing release $VERSION"
+
+              # Create tag if missing
+              if ! git rev-parse "$VERSION" >/dev/null 2>&1; then
+                git tag "$VERSION"
+                git push origin "$VERSION"
+              fi
+
+              # Check if release exists
+              if gh release view "$VERSION" >/dev/null 2>&1; then
+                echo "Release $VERSION already exists"
+              else
+                gh release create "$VERSION" \
+                  "$EXE_PATH" \
+                  --title "$VERSION" \
+                  --notes "Release $VERSION"
+              fi
+            fi
+          done
